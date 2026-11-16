@@ -615,23 +615,23 @@
     const target = free.find((s) => selected.has(s.id)) || free[Math.floor(Math.random() * free.length)];
     if (!target) { $('race-result').textContent = 'No free seat left to race for.'; return; }
     $('race').disabled = true;
-    $('race-result').textContent = `50 buyers racing for ${target.section} ${target.rowLabel}${target.seatNumber}…`;
-    // 50 different people: each racer gets its own throwaway guest login first
-    const guests = await Promise.all(Array.from({ length: 50 }, () =>
-      api('POST', '/api/auth/guest', null, { token: null }).then((r) => r.ok ? r.data.token : null).catch(() => null)));
-    const started = performance.now();
-    const results = await Promise.all(guests.map((token) => token
-      ? api('POST', '/api/bookings', { eventId, seatIds: [target.id] }, { token }).catch(() => ({ status: 0 }))
-      : Promise.resolve({ status: 0 })));
-    const ms = Math.round(performance.now() - started);
-    const won = results.filter((r) => r.status === 201).length;
-    const lost = results.filter((r) => r.status === 409).length;
-    const other = results.length - won - lost;
-    $('race-result').textContent =
-      `${won} winner · ${lost} got 409 Conflict${other ? ` · ${other} other (rate limited or error)` : ''} · ${ms} ms. ` +
-      (won === 1 ? 'Exactly one buyer got the seat. ✓' : won === 0 ? 'Nobody won (the seat was taken just before).' : '✗ more than one winner!');
-    $('race').disabled = false;
-    await refreshAll();
+    $('race-result').textContent = `50 virtual threads racing for ${target.section} ${target.rowLabel}${target.seatNumber}…`;
+    try {
+      const res = await api('POST', `/api/demo/race?eventId=${eventId}&seatId=${target.id}&concurrency=50`);
+      if (res.ok) {
+        const d = res.data;
+        $('race-result').textContent =
+          `${d.successfulHolds} winner · ${d.conflicts} got 409 Conflict · ${d.durationMs} ms (${d.lockingStrategy} / Java 21 Virtual Threads). ` +
+          (d.doubleBookedSeats === 0 && d.successfulHolds === 1 ? 'Zero double-bookings verified. ✓' : d.auditVerification);
+      } else {
+        $('race-result').textContent = 'Race simulation error: ' + res.status;
+      }
+    } catch (e) {
+      $('race-result').textContent = 'Race error: ' + e;
+    } finally {
+      $('race').disabled = false;
+      await refreshAll();
+    }
   });
 
   let refreshing = false;

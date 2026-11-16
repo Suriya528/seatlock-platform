@@ -58,6 +58,7 @@ public class SecurityConfig {
                 .logout(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login", "/api/auth/guest").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/demo/race").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/events", "/api/events/*", "/api/events/*/seats",
                                 "/api/events/*/seats/stream", "/api/events/*/stats").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/events").hasRole(AppUser.ROLE_ADMIN)

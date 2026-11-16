@@ -293,6 +293,7 @@ All tests start their own Postgres, Redis and Kafka containers (Docker must be r
 | `POST` | `/api/auth/register` · `/api/auth/login` | Sign up / log in → a JWT (send it as `Authorization: Bearer <token>`) |
 | `POST` | `/api/auth/guest` | Throwaway guest token (no account) |
 | `GET` | `/api/auth/me` | Who the token belongs to |
+| `POST` | `/api/demo/race` | **Concurrency race simulation:** releases 50-100 Java 21 Virtual Threads simultaneously at the same seat; verifies 1 winner, 49 conflicts, and 0 double-bookings |
 | `POST` | `/api/events` | **Organizer only.** Create an event; seats are generated from `sections` (`queueEnabled: true` for a waiting room) |
 | `GET` | `/api/events` · `/api/events/{id}` | List / get events |
 | `GET` | `/api/events/{id}/seats?status=AVAILABLE` | Seat map (cached, `X-Cache: HIT/MISS`) |
