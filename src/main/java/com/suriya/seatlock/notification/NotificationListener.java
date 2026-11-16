@@ -1,0 +1,82 @@
+package com.suriya.seatlock.notification;
+
+import com.suriya.seatlock.messaging.Messages;
+import com.suriya.seatlock.messaging.MessageHandler;
+import com.suriya.seatlock.messaging.ProcessedMessages;
+import com.suriya.seatlock.messaging.Topics;
+import com.suriya.seatlock.config.EmailProperties;
+import com.suriya.seatlock.notification.email.BookingEmails;
+import com.suriya.seatlock.notification.email.EmailDispatcher;
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.messaging.handler.annotation.Header;
+import org.springframework.messaging.handler.annotation.Payload;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.json.JsonMapper;
+
+import java.time.Duration;
+import java.time.Instant;
+
+/**
+ * Sends the user a message whenever their booking is confirmed, cancelled or expires: an in-app
+ * notification, plus an email when the customer gave an address.
+ * Uses the inbox table so a redelivered message never notifies (or emails) twice.
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class NotificationListener implements MessageHandler {
+
+    private static final String CONSUMER = "notifications";
+
+    private final NotificationRepository repository;
+    private final ProcessedMessages processedMessages;
+    private final JsonMapper json;
+    private final BookingEmails emails;
+    private final EmailProperties emailProperties;
+    private final ApplicationEventPublisher events;
+
+    @Override
+    public String topic() {
+        return Topics.BOOKING_EVENTS;
+    }
+
+    @Override
+    @KafkaListener(topics = Topics.BOOKING_EVENTS, groupId = "seatlock-notifications")
+    @Transactional
+    public void handle(@Payload String payload, @Header(Topics.HEADER_EVENT_ID) String eventId) {
+        if (!processedMessages.markProcessed(CONSUMER, eventId)) {
+            log.info("Booking event {} already notified, skipping", eventId);
+            return;
+        }
+        Messages.BookingEvent event = json.readValue(payload, Messages.BookingEvent.class);
+        String message = switch (event.type()) {
+            case "BookingConfirmed" -> "Your booking #%d is confirmed (%d seat(s)). Enjoy the show!"
+                    .formatted(event.bookingId(), event.seatIds().size());
+            case "BookingExpired" -> "Your hold on booking #%d expired and the seats were released."
+                    .formatted(event.bookingId());
+            default -> "Your booking #%d was cancelled and the seats were released.".formatted(event.bookingId());
+        };
+        Notification notification = new Notification();
+        notification.setBookingId(event.bookingId());
+        notification.setUserId(event.userId());
+        notification.setType(event.type());
+        notification.setMessage(message);
+        String to = event.customerEmail();
+        if (to != null) {
+            notification.setEmailTo(to);
+            boolean underCap = repository.countByEmailToAndCreatedAtAfter(to, Instant.now().minus(Duration.ofDays(1)))
+                    < emailProperties.maxPerRecipientPerDay();
+            notification.setEmailStatus(underCap ? EmailStatus.PENDING : EmailStatus.SKIPPED);
+        }
+        repository.save(notification);
+        if (notification.getEmailStatus() == EmailStatus.PENDING) {
+            // sent after this transaction commits (see EmailDispatcher)
+            events.publishEvent(new EmailDispatcher.EmailRequested(notification.getId(), emails.build(event)));
+        }
+        log.info("Notification to {}: {}", event.userId(), message);
+    }
+}

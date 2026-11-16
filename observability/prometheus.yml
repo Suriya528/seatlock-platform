@@ -1,0 +1,10 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: seatlock
+    metrics_path: /actuator/prometheus
+    static_configs:
+      # ONE target, so metrics are never counted twice. It works for both ways of running the app:
+      # ./mvnw spring-boot:run on your machine, or the compose "app" service (which publishes 8080).
+      - targets: ["host.docker.internal:8080"]

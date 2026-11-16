@@ -1,0 +1,168 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SeatLock: Book live events</title>
+<meta name="description" content="Book seats for concerts, comedy, sports and theatre on SeatLock.">
+<link rel="stylesheet" href="/assets/app.css">
+<style>
+  .hero { background: radial-gradient(900px 400px at 0% 0%, #5b3fd1 0%, transparent 60%),
+                      radial-gradient(700px 380px at 100% 100%, #b53b8a 0%, transparent 60%), #2a1d6b;
+          color: #fff; padding: 44px 0 86px; }
+  .hero .hello { color: var(--gold); font-weight: 600; margin-bottom: 8px; }
+  .hero h1 { font-size: clamp(28px, 4vw, 42px); font-weight: 800; letter-spacing: -.03em; max-width: 640px; }
+  .searchbox { margin-top: -54px; position: relative; z-index: 2; }
+  .searchbox .card { padding: 18px; box-shadow: var(--shadow-lg); border: 0; }
+  .searchrow { display: flex; gap: 12px; align-items: center; }
+  .searchfield { flex: 1; display: flex; align-items: center; gap: 10px; border: 1.5px solid var(--border); border-radius: 12px; padding: 0 14px; color: var(--muted); }
+  .searchfield:focus-within { border-color: var(--brand-600); box-shadow: 0 0 0 4px var(--brand-50); }
+  .searchfield input { border: 0; outline: 0; font: inherit; font-size: 16px; padding: 14px 0; flex: 1; min-width: 0; color: var(--text); background: none; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  .chip { font: inherit; font-size: 14px; font-weight: 600; border: 1.5px solid var(--border); background: var(--surface); color: var(--muted);
+          border-radius: 999px; padding: 7px 14px; cursor: pointer; }
+  .chip:hover { border-color: var(--brand-100); color: var(--brand); }
+  .chip[aria-pressed="true"] { background: var(--brand); border-color: var(--brand); color: #fff; }
+  .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 36px 0 16px; }
+  .section-head h2 { font-size: 22px; font-weight: 800; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px; }
+  .ev { display: flex; flex-direction: column; overflow: hidden; color: inherit; transition: transform .15s, box-shadow .15s; }
+  .ev:hover { transform: translateY(-3px); box-shadow: var(--shadow); text-decoration: none; }
+  .ev .art-top { height: 150px; padding: 14px; display: flex; justify-content: space-between; align-items: flex-start; }
+  .ev .date { background: #fff; color: var(--text); border-radius: 10px; padding: 6px 10px; text-align: center; line-height: 1.1; box-shadow: var(--shadow-sm); }
+  .ev .date b { display: block; font-size: 20px; font-weight: 800; color: var(--brand); }
+  .ev .date span { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .06em; }
+  .ev .info { padding: 16px; display: grid; gap: 6px; flex: 1; }
+  .ev h3 { font-size: 17px; font-weight: 700; }
+  .ev .meta { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; }
+  .ev .foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); }
+  .ev .price { font-size: 13px; color: var(--muted); }
+  .ev .price b { font-size: 17px; color: var(--text); }
+  .ev.soldout { opacity: .7; }
+  .empty { text-align: center; padding: 56px 16px; }
+  .trust { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 40px; }
+  .trust .card { padding: 18px; display: flex; gap: 12px; align-items: flex-start; }
+  .trust .ico { width: 38px; height: 38px; border-radius: 10px; background: var(--brand-50); color: var(--brand); display: grid; place-items: center; flex: none; }
+  .trust b { display: block; }
+  @media (max-width: 560px) { .searchrow .btn { display: none; } }
+</style>
+</head>
+<body>
+<header id="topbar"></header>
+<main>
+  <section class="hero">
+    <div class="container">
+      <div class="hello" id="hello"></div>
+      <h1>Find your next live experience</h1>
+    </div>
+  </section>
+
+  <div class="container">
+    <div class="searchbox">
+      <div class="card">
+        <div class="searchrow">
+          <label class="searchfield" for="q"><span data-icon="search"></span>
+            <input id="q" type="search" placeholder="Search events, artists, venues or cities" autocomplete="off">
+          </label>
+          <button class="btn btn-primary btn-lg" id="go">Search</button>
+        </div>
+        <div class="chips" role="group" aria-label="Filter by category" id="chips"></div>
+      </div>
+    </div>
+
+    <div class="section-head">
+      <h2 id="list-title">Upcoming events</h2>
+      <span class="muted small" id="count"></span>
+    </div>
+    <div class="grid" id="grid" aria-live="polite"></div>
+
+    <div class="trust">
+      <div class="card"><span class="ico" data-icon="shield"></span><div><b>No double-bookings</b><span class="muted small">Every seat is locked for one buyer, even when thousands click at once.</span></div></div>
+      <div class="card"><span class="ico" data-icon="clock"></span><div><b>10-minute seat hold</b><span class="muted small">Your seats are reserved while you pay. No rush, no surprises.</span></div></div>
+      <div class="card"><span class="ico" data-icon="check"></span><div><b>Instant e-tickets</b><span class="muted small">QR tickets in your account the moment you pay.</span></div></div>
+    </div>
+  </div>
+</main>
+<footer id="footer"></footer>
+
+<script src="/assets/app.js"></script>
+<script>
+(() => {
+  const { auth, api, problem, fmt, h, icons, poster, categoryLabel, header, footer } = SeatLock;
+  const user = auth.require();
+  if (!user) return;
+  header('events');
+  footer();
+  document.querySelectorAll('[data-icon]').forEach((el) => { el.innerHTML = icons[el.dataset.icon]; });
+  const $ = (id) => document.getElementById(id);
+  const hour = new Date().getHours();
+  $('hello').textContent = `${hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'}, ${user.user.name.split(' ')[0]} 👋`;
+
+  const categories = [['ALL', 'All events'], ['CONCERT', 'Concerts'], ['COMEDY', 'Comedy'], ['SPORTS', 'Sports'], ['THEATRE', 'Theatre']];
+  let category = 'ALL';
+  let events = [];
+  $('chips').append(...categories.map(([key, label]) =>
+    h('button', { class: 'chip', 'aria-pressed': String(key === category), onclick: (e) => {
+      category = key;
+      document.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', String(c === e.currentTarget)));
+      render();
+    } }, label)));
+
+  // skeletons while loading (a sleeping free server can take a minute to wake up)
+  $('grid').replaceChildren(...Array.from({ length: 6 }, () => h('div', { class: 'skeleton', style: { height: '300px' } })));
+
+  function availability(e) {
+    if (e.totalSeats == null) return null;
+    if (e.availableSeats === 0) return h('span', { class: 'badge badge-bad' }, 'Sold out');
+    const share = e.availableSeats / e.totalSeats;
+    if (e.availableSeats <= 15) return h('span', { class: 'badge badge-warn' }, `Only ${e.availableSeats} left`);
+    if (share < 0.35) return h('span', { class: 'badge badge-gold' }, 'Selling fast');
+    return h('span', { class: 'badge badge-ok' }, 'Available');
+  }
+
+  function card(e) {
+    const top = h('div', { class: 'art-top' },
+      h('div', { class: 'date' }, h('b', { text: fmt.day(e.startsAt) }), h('span', { text: fmt.month(e.startsAt) })),
+      h('span', { class: 'badge badge-dark', text: categoryLabel[e.category] || 'Event' }));
+    poster(e, top);
+    const soldOut = e.availableSeats === 0;
+    return h('a', { class: 'card ev' + (soldOut ? ' soldout' : ''), href: `/event.html?id=${e.id}`, 'aria-label': `${e.name}, ${fmt.when(e.startsAt)}` },
+      top,
+      h('div', { class: 'info' },
+        h('h3', { text: e.name }),
+        h('div', { class: 'meta', html: icons.pin }, e.venue),
+        h('div', { class: 'meta', html: icons.cal }, fmt.when(e.startsAt))),
+      h('div', { class: 'foot' },
+        h('span', { class: 'price' }, e.minPriceCents != null ? 'from ' : '', h('b', { text: e.minPriceCents != null ? fmt.money(e.minPriceCents) : '' })),
+        availability(e)));
+  }
+
+  function render() {
+    const q = $('q').value.trim().toLowerCase();
+    const list = events.filter((e) => (category === 'ALL' || e.category === category)
+      && (!q || (e.name + ' ' + e.venue).toLowerCase().includes(q)));
+    $('count').textContent = `${list.length} event${list.length === 1 ? '' : 's'}`;
+    $('list-title').textContent = q ? `Results for “${$('q').value.trim()}”` : 'Upcoming events';
+    $('grid').replaceChildren(...(list.length ? list.map(card) : [h('div', { class: 'card empty', style: { gridColumn: '1 / -1' } },
+      h('h3', { text: 'No events match your search' }), h('p', { class: 'muted', text: 'Try another name, venue or city, or clear the filters.' }))]));
+  }
+
+  $('q').addEventListener('input', render);
+  $('go').addEventListener('click', render);
+
+  (async function load(attempt = 0) {
+    const res = await api('GET', '/api/events');
+    if (!res.ok) {
+      if (attempt < 12) return setTimeout(() => load(attempt + 1), 5000);
+      $('grid').replaceChildren(h('div', { class: 'alert alert-bad', style: { gridColumn: '1 / -1' } }, problem(res)));
+      return;
+    }
+    const now = new Date();
+    events = res.data.filter((e) => new Date(e.startsAt) > now)
+      .sort((a, b) => (b.availableSeats > 0) - (a.availableSeats > 0) || new Date(a.startsAt) - new Date(b.startsAt));
+    render();
+  })();
+})();
+</script>
+</body>
+</html>

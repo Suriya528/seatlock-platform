@@ -1,0 +1,120 @@
+spring:
+  application:
+    name: seatlock
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      ssl:
+        enabled: ${REDIS_SSL:false}       # true for hosted Redis such as Upstash
+      repositories:
+        enabled: false
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/seatlock}
+    username: ${DB_USER:seatlock}
+    password: ${DB_PASSWORD:seatlock}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:20}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  mvc:
+    problemdetails:
+      enabled: true
+  servlet:
+    multipart:
+      max-file-size: 12MB             # phone photos of tickets at the check-in scanner
+      max-request-size: 12MB
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    template:
+      observation-enabled: true       # carry the trace id into Kafka headers...
+    listener:
+      observation-enabled: true       # ...and continue the same trace in consumers
+    producer:
+      acks: all                       # wait until the broker has safely stored the message
+    consumer:
+      auto-offset-reset: earliest     # a new consumer group starts from the beginning
+
+  threads:
+    virtual:
+      enabled: true                   # Java 21 virtual threads: cheap blocking under high concurrency
+
+server:
+  port: ${PORT:8080}                  # hosting platforms (e.g. Render) tell the app which port to use
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: seatlock
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+  tracing:
+    sampling:
+      probability: 1.0                # trace every request (lower this in production)
+
+seatlock:
+  auth:
+    jwt-secret: ${JWT_SECRET:}        # signs login tokens; set it or everyone is logged out on restart
+    token-ttl: 7d
+    admin-email: ${ADMIN_EMAIL:}      # organizer account (create events, check tickets in)
+    admin-password: ${ADMIN_PASSWORD:}
+    trust-user-header: false          # NEVER true in production (tests/benchmarks only)
+  messaging:
+    mode: kafka                       # kafka | local (in-process, no broker: see application-demo.yml)
+  booking:
+    hold-ttl: 10m                     # seats stay reserved this long before auto-release
+    max-seats-per-booking: 10
+    expiry-sweep-interval-ms: 5000
+    expiry-sweep-batch-size: 200
+    fast-reject: true                 # answer requests for already-taken seats from the cache
+  locking:
+    # OPTIMISTIC  -> @Version check, losers fail at commit
+    # PESSIMISTIC -> SELECT ... FOR UPDATE, losers wait then fail
+    # REDIS       -> distributed lock per seat, losers fail fast without touching the DB
+    strategy: ${LOCKING_STRATEGY:PESSIMISTIC}
+    redis-lock-ttl: 5s
+  payment:
+    fake-latency-ms: 0
+    pending-timeout: 1m               # re-drive a payment that has no result after this long
+    give-up-after: 15m                # provider still unreachable -> fail it, release the seats
+    reconcile-interval-ms: 30000
+  outbox:
+    relay-interval-ms: 200
+  email:
+    brevo-api-key: ${BREVO_API_KEY:}  # empty = emails are only logged
+    from-email: ${EMAIL_FROM:}        # a sender address verified in Brevo
+    from-name: ${EMAIL_FROM_NAME:SeatLock}
+    public-url: ${PUBLIC_URL:${RENDER_EXTERNAL_URL:http://localhost:8080}}
+    currency: INR
+    max-per-recipient-per-day: 10
+  live:
+    flush-interval-ms: 300            # how often seat changes are pushed to live viewers
+    heartbeat-interval-ms: 20000
+    max-subscribers: 1000
+  cache:
+    seat-map-ttl: 5s                  # safety-net TTL; entries are also evicted on every change
+  rate-limit:
+    enabled: true
+    capacity: 20                      # burst size per user
+    refill-per-second: 5              # sustained requests per second per user
+    ip-capacity: 200                  # per-client-IP burst (X-User-Id isn't authenticated)
+    ip-refill-per-second: 50
+    login-capacity: 10                # log-in / sign-up attempts per IP (password guessing)
+    login-refill-per-second: 0.1
+  queue:
+    max-active-users: 100             # shoppers allowed in at once per hot event
+    admit-batch-size: 50              # admitted per tick
+    admit-interval-ms: 1000
+    admission-ttl: 10m
+    auto-admit: true
