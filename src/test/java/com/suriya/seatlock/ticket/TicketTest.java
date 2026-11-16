@@ -61,7 +61,7 @@ class TicketTest extends IntegrationTest {
         assertThat(admitted.get("ticket").get("seat").asString()).startsWith("FLOOR A");
         assertThat(admitted.get("ticket").get("holderName").asString()).isEqualTo("Fan One");
 
-        JsonNode again = checkIn(" seatlock-platform" + code.toLowerCase() + " ");   // tolerant of case / prefix / spaces
+        JsonNode again = checkIn(" seatlock-" + code.toLowerCase() + " ");   // tolerant of case / prefix / spaces
         assertThat(again.get("result").asString()).isEqualTo("ALREADY_USED");
         assertThat(again.get("checkedInAt").asString()).isNotBlank();
 
